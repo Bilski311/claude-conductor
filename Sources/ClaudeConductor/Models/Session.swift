@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Represents a single Claude Code session
-struct Session: Identifiable, Hashable {
+struct Session: Identifiable, Hashable, Codable {
     let id: UUID
     var name: String
     var directory: String
@@ -27,7 +27,7 @@ struct Session: Identifiable, Hashable {
     }
 }
 
-enum SessionRole: String, CaseIterable {
+enum SessionRole: String, CaseIterable, Codable {
     case conductor = "Conductor"
     case worker = "Worker"
 
@@ -46,7 +46,7 @@ enum SessionRole: String, CaseIterable {
     }
 }
 
-enum SessionStatus: String {
+enum SessionStatus: String, Codable {
     case idle = "Idle"
     case working = "Working"
     case waitingForInput = "Waiting"

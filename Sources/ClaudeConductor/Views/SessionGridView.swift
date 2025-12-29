@@ -131,6 +131,11 @@ struct SwiftTerminalView: NSViewRepresentable {
         terminalView.nativeForegroundColor = NSColor.black
         terminalView.nativeBackgroundColor = NSColor.white
 
+        // Set up delegate to capture output
+        context.coordinator.sessionId = session.id
+        context.coordinator.sessionStore = sessionStore
+        terminalView.terminalDelegate = context.coordinator
+
         // Set up environment with proper PATH for Spotlight launches
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
@@ -147,10 +152,13 @@ struct SwiftTerminalView: NSViewRepresentable {
         let currentPath = env["PATH"] ?? "/usr/bin:/bin"
         env["PATH"] = (additionalPaths + [currentPath]).joined(separator: ":")
 
+        // Set working directory
+        env["PWD"] = session.directory
+
         // Start claude directly with proper PATH, skip interactive shell noise
         terminalView.startProcess(
             executable: "/bin/zsh",
-            args: ["-c", "claude"],
+            args: ["-c", "cd '\(session.directory)' && claude"],
             environment: Array(env.map { "\($0.key)=\($0.value)" }),
             execName: "claude"
         )
@@ -170,8 +178,35 @@ struct SwiftTerminalView: NSViewRepresentable {
         Coordinator()
     }
 
-    class Coordinator {
+    class Coordinator: NSObject, TerminalViewDelegate {
         var terminalView: LocalProcessTerminalView?
+        var sessionId: UUID?
+        var sessionStore: SessionStore?
+
+        func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
+
+        func setTerminalTitle(source: TerminalView, title: String) {}
+
+        func setTerminalIconTitle(source: TerminalView, title: String) {}
+
+        func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+
+        func send(source: TerminalView, data: ArraySlice<UInt8>) {
+            // Capture output for API access
+            if let text = String(bytes: data, encoding: .utf8), let id = sessionId {
+                DispatchQueue.main.async {
+                    self.sessionStore?.appendOutput(id, text: text)
+                }
+            }
+        }
+
+        func scrolled(source: TerminalView, position: Double) {}
+
+        func clipboardCopy(source: TerminalView, content: Data) {}
+
+        func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+
+        func requestOpenLink(source: TerminalView, link: String, params: [String : String]) {}
     }
 }
 
