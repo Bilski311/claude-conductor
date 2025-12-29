@@ -4,3 +4,5 @@
 xcuserdata/
 DerivedData/
 .DS_Store
+electron-app/dist/
+electron-app/node_modules/
