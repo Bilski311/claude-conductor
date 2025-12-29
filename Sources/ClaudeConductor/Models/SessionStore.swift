@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import SwiftTerm
 
 /// Main state management for all Claude sessions
 @MainActor
@@ -11,7 +12,7 @@ class SessionStore: ObservableObject {
     @Published var showDispatchSheet = false
     @Published var taskHistory: [DispatchTask] = []
 
-    private var terminalProcesses: [UUID: TerminalProcess] = [:]
+    private var terminalViews: [UUID: LocalProcessTerminalView] = [:]
 
     init() {
         // Create a default session for demo
@@ -50,11 +51,8 @@ class SessionStore: ObservableObject {
     }
 
     func removeSession(_ id: UUID) {
-        // Stop the terminal process
-        if let process = terminalProcesses[id] {
-            process.terminate()
-            terminalProcesses.removeValue(forKey: id)
-        }
+        // The terminal view will be cleaned up when the view is removed
+        terminalViews.removeValue(forKey: id)
         sessions.removeAll { $0.id == id }
         if activeSessionId == id {
             activeSessionId = sessions.first?.id
@@ -67,38 +65,21 @@ class SessionStore: ObservableObject {
         }
     }
 
-    // MARK: - Terminal Process Management
+    // MARK: - Terminal View Management
 
-    func startSession(_ id: UUID) {
-        guard let session = sessions.first(where: { $0.id == id }) else { return }
-
-        let process = TerminalProcess(
-            directory: session.directory,
-            environment: ["MCP_UE_PORT": "\(session.mcpPort)"]
-        )
-
-        process.onOutput = { [weak self] output in
-            // Handle terminal output
-            self?.handleTerminalOutput(sessionId: id, output: output)
-        }
-
-        process.onStatusChange = { [weak self] isRunning in
-            Task { @MainActor in
-                self?.updateSessionStatus(id, status: isRunning ? .working : .disconnected)
-            }
-        }
-
-        terminalProcesses[id] = process
-        process.start(command: "claude")
+    func setTerminalView(_ id: UUID, view: LocalProcessTerminalView) {
+        terminalViews[id] = view
         updateSessionStatus(id, status: .working)
     }
 
-    func sendInput(_ id: UUID, text: String) {
-        terminalProcesses[id]?.sendInput(text)
+    func getTerminalView(_ id: UUID) -> LocalProcessTerminalView? {
+        terminalViews[id]
     }
 
-    func getTerminalProcess(_ id: UUID) -> TerminalProcess? {
-        terminalProcesses[id]
+    func restartSession(_ id: UUID) {
+        // Remove terminal view reference - the view will recreate it
+        terminalViews.removeValue(forKey: id)
+        updateSessionStatus(id, status: .idle)
     }
 
     // MARK: - Orchestration
@@ -106,9 +87,9 @@ class SessionStore: ObservableObject {
     func dispatchTask(_ task: DispatchTask) {
         taskHistory.append(task)
 
-        // Send the prompt to the target session
-        if let process = terminalProcesses[task.targetSessionId] {
-            process.sendInput(task.prompt + "\n")
+        // Send the prompt to the target terminal
+        if let terminalView = terminalViews[task.targetSessionId] {
+            terminalView.send(txt: task.prompt + "\n")
             updateSessionStatus(task.targetSessionId, status: .working)
         }
     }
@@ -120,15 +101,9 @@ class SessionStore: ObservableObject {
         }
     }
 
-    // MARK: - Private
-
-    private func handleTerminalOutput(sessionId: UUID, output: String) {
-        // Detect status changes based on output
-        // e.g., if output contains ">" prompt, session is waiting for input
-        if output.contains("> ") || output.contains("❯ ") {
-            Task { @MainActor in
-                updateSessionStatus(sessionId, status: .waitingForInput)
-            }
+    func sendInput(_ id: UUID, text: String) {
+        if let terminalView = terminalViews[id] {
+            terminalView.send(txt: text)
         }
     }
 }

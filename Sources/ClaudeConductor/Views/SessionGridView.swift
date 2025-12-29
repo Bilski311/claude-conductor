@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftTerm
+import AppKit
 
 struct SessionGridView: View {
     @EnvironmentObject var sessionStore: SessionStore
@@ -28,8 +30,8 @@ struct SessionGridView: View {
 
             // Grid of terminal panes
             GeometryReader { geometry in
-                let gridColumns = min(columns, sessionStore.sessions.count)
-                let gridRows = (sessionStore.sessions.count + gridColumns - 1) / gridColumns
+                let gridColumns = max(1, min(columns, sessionStore.sessions.count))
+                let gridRows = max(1, (sessionStore.sessions.count + gridColumns - 1) / gridColumns)
 
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: gridColumns),
@@ -50,9 +52,6 @@ struct SessionGridView: View {
 struct TerminalPaneView: View {
     @EnvironmentObject var sessionStore: SessionStore
     let session: Session
-    @State private var terminalOutput: String = ""
-    @State private var inputText: String = ""
-    @FocusState private var isFocused: Bool
 
     var isActive: Bool {
         sessionStore.activeSessionId == session.id
@@ -88,7 +87,7 @@ struct TerminalPaneView: View {
                     }
                     Divider()
                     Button("Restart") {
-                        restartSession()
+                        sessionStore.restartSession(session.id)
                     }
                     Button("Close", role: .destructive) {
                         sessionStore.removeSession(session.id)
@@ -103,41 +102,9 @@ struct TerminalPaneView: View {
 
             Divider()
 
-            // Terminal content
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(terminalOutput)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .id("terminal-bottom")
-                }
-                .onChange(of: terminalOutput) { _, _ in
-                    proxy.scrollTo("terminal-bottom", anchor: .bottom)
-                }
-            }
-            .background(Color(nsColor: .textBackgroundColor))
-
-            Divider()
-
-            // Input field
-            HStack {
-                TextField("Type a message...", text: $inputText)
-                    .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
-                    .focused($isFocused)
-                    .onSubmit {
-                        sendInput()
-                    }
-
-                Button(action: sendInput) {
-                    Image(systemName: "arrow.up.circle.fill")
-                }
-                .buttonStyle(.plain)
-                .disabled(inputText.isEmpty)
-            }
-            .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor))
+            // SwiftTerm Terminal View
+            SwiftTerminalView(session: session, sessionStore: sessionStore)
+                .background(Color.black)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(8)
@@ -147,39 +114,55 @@ struct TerminalPaneView: View {
         )
         .onTapGesture {
             sessionStore.activeSessionId = session.id
-            isFocused = true
-        }
-        .onAppear {
-            setupTerminal()
         }
     }
+}
 
-    private func setupTerminal() {
-        if let process = sessionStore.getTerminalProcess(session.id) {
-            process.onOutput = { output in
-                terminalOutput += output
-            }
-        } else {
-            sessionStore.startSession(session.id)
-            if let process = sessionStore.getTerminalProcess(session.id) {
-                process.onOutput = { output in
-                    terminalOutput += output
-                }
-            }
-        }
+// NSViewRepresentable wrapper for SwiftTerm's LocalProcessTerminalView
+struct SwiftTerminalView: NSViewRepresentable {
+    let session: Session
+    let sessionStore: SessionStore
+
+    func makeNSView(context: Context) -> LocalProcessTerminalView {
+        let terminalView = LocalProcessTerminalView(frame: .zero)
+
+        // Configure terminal appearance
+        terminalView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        terminalView.nativeForegroundColor = NSColor.white
+        terminalView.nativeBackgroundColor = NSColor.black
+
+        // Set up environment
+        var env = ProcessInfo.processInfo.environment
+        env["TERM"] = "xterm-256color"
+        env["COLORTERM"] = "truecolor"
+        env["MCP_UE_PORT"] = "\(session.mcpPort)"
+
+        // Start the process
+        let shell = env["SHELL"] ?? "/bin/zsh"
+        terminalView.startProcess(
+            executable: shell,
+            args: ["-l", "-c", "claude"],
+            environment: Array(env.map { "\($0.key)=\($0.value)" }),
+            execName: "claude"
+        )
+
+        // Store reference in session store
+        context.coordinator.terminalView = terminalView
+        sessionStore.setTerminalView(session.id, view: terminalView)
+
+        return terminalView
     }
 
-    private func sendInput() {
-        guard !inputText.isEmpty else { return }
-        sessionStore.sendInput(session.id, text: inputText + "\n")
-        terminalOutput += "> \(inputText)\n"
-        inputText = ""
+    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+        // Updates if needed
     }
 
-    private func restartSession() {
-        terminalOutput = ""
-        sessionStore.startSession(session.id)
-        setupTerminal()
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var terminalView: LocalProcessTerminalView?
     }
 }
 
