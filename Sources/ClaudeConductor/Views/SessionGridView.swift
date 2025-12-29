@@ -147,11 +147,10 @@ struct SwiftTerminalView: NSViewRepresentable {
         let currentPath = env["PATH"] ?? "/usr/bin:/bin"
         env["PATH"] = (additionalPaths + [currentPath]).joined(separator: ":")
 
-        // Start the process - use login shell to source profile
-        let shell = env["SHELL"] ?? "/bin/zsh"
+        // Start claude directly with proper PATH, skip interactive shell noise
         terminalView.startProcess(
-            executable: shell,
-            args: ["-l", "-i", "-c", "claude"],
+            executable: "/bin/zsh",
+            args: ["-c", "claude"],
             environment: Array(env.map { "\($0.key)=\($0.value)" }),
             execName: "claude"
         )
