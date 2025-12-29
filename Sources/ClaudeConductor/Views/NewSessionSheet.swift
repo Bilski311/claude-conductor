@@ -47,20 +47,8 @@ struct NewSessionSheet: View {
 
                 HStack {
                     PresetButton(
-                        title: "Metanoia Main",
+                        title: "Metanoia Worker",
                         directory: "/Users/dominikbilski/private/Metanoia",
-                        port: 55557,
-                        role: .conductor
-                    ) { name, dir, port, r in
-                        self.name = name
-                        self.directory = dir
-                        self.mcpPort = port
-                        self.role = r
-                    }
-
-                    PresetButton(
-                        title: "Combat Worker",
-                        directory: "/Users/dominikbilski/private/Metanoia-combat",
                         port: 55558,
                         role: .worker
                     ) { name, dir, port, r in
@@ -71,9 +59,21 @@ struct NewSessionSheet: View {
                     }
 
                     PresetButton(
-                        title: "UI Worker",
-                        directory: "/Users/dominikbilski/private/Metanoia-ui",
+                        title: "Unreal MCP",
+                        directory: "/Users/dominikbilski/private/unreal-mcp",
                         port: 55559,
+                        role: .worker
+                    ) { name, dir, port, r in
+                        self.name = name
+                        self.directory = dir
+                        self.mcpPort = port
+                        self.role = r
+                    }
+
+                    PresetButton(
+                        title: "Conductor Tools",
+                        directory: "/Users/dominikbilski/private/claude-conductor",
+                        port: 55560,
                         role: .worker
                     ) { name, dir, port, r in
                         self.name = name

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "conductor": {
+      "type": "stdio",
+      "command": "/Users/dominikbilski/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/dominikbilski/private/claude-conductor/mcp-server",
+        "python",
+        "conductor_server.py"
+      ]
+    }
+  }
+}

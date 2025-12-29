@@ -104,7 +104,7 @@ struct TerminalPaneView: View {
 
             // SwiftTerm Terminal View
             SwiftTerminalView(session: session, sessionStore: sessionStore)
-                .background(Color.black)
+                .background(Color.white)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(8)
@@ -126,22 +126,32 @@ struct SwiftTerminalView: NSViewRepresentable {
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let terminalView = LocalProcessTerminalView(frame: .zero)
 
-        // Configure terminal appearance
+        // Configure terminal appearance - black text on white background
         terminalView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        terminalView.nativeForegroundColor = NSColor.white
-        terminalView.nativeBackgroundColor = NSColor.black
+        terminalView.nativeForegroundColor = NSColor.black
+        terminalView.nativeBackgroundColor = NSColor.white
 
-        // Set up environment
+        // Set up environment with proper PATH for Spotlight launches
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["MCP_UE_PORT"] = "\(session.mcpPort)"
 
-        // Start the process
+        // Ensure common paths are included (for Spotlight launches)
+        let additionalPaths = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/Users/\(NSUserName())/.local/bin",
+            "/Users/\(NSUserName())/.nvm/versions/node/v22.11.0/bin"
+        ]
+        let currentPath = env["PATH"] ?? "/usr/bin:/bin"
+        env["PATH"] = (additionalPaths + [currentPath]).joined(separator: ":")
+
+        // Start the process - use login shell to source profile
         let shell = env["SHELL"] ?? "/bin/zsh"
         terminalView.startProcess(
             executable: shell,
-            args: ["-l", "-c", "claude"],
+            args: ["-l", "-i", "-c", "claude"],
             environment: Array(env.map { "\($0.key)=\($0.value)" }),
             execName: "claude"
         )

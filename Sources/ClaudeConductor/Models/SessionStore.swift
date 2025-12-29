@@ -15,17 +15,16 @@ class SessionStore: ObservableObject {
     private var terminalViews: [UUID: LocalProcessTerminalView] = [:]
 
     init() {
-        // Create a default session for demo
-        #if DEBUG
-        let demoSession = Session(
-            name: "Main",
-            directory: "/Users/dominikbilski/private/Metanoia",
+        // Create a default conductor session
+        // Conductor runs from claude-conductor dir which has .mcp.json with orchestration tools
+        let conductorSession = Session(
+            name: "Conductor",
+            directory: "/Users/dominikbilski/private/claude-conductor",
             mcpPort: 55557,
             role: .conductor
         )
-        sessions.append(demoSession)
-        activeSessionId = demoSession.id
-        #endif
+        sessions.append(conductorSession)
+        activeSessionId = conductorSession.id
     }
 
     var conductorSession: Session? {
